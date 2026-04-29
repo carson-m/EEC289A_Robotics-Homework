@@ -1,0 +1,56 @@
+{
+  "homework_name": "Homework: Sim-to-Real Quadruped Locomotion with MuJoCo Playground",
+  "robot": "Go2",
+  "environment_name": "Go2JoystickFlatTerrain",
+  "num_steps": 2743,
+  "num_episodes": 4,
+  "metrics": {
+    "velocity_tracking_error": 0.08832710236310959,
+    "yaw_tracking_error": 0.08391128480434418,
+    "fall_rate": 0.75,
+    "energy_proxy": 11.019375801086426,
+    "foot_slip_proxy": 0.07692026346921921
+  },
+  "normalized_scores": {
+    "velocity_tracking_error": 1.0,
+    "yaw_tracking_error": 1.0,
+    "fall_rate": 0.0,
+    "energy_proxy": 0.9056445062160492,
+    "foot_slip_proxy": 0.6837763140598933
+  },
+  "course_composite_score": 0.7542243073383967,
+  "per_episode_summary": [
+    {
+      "episode_id": 0,
+      "episode_label": "forward_only",
+      "num_steps": 1500,
+      "velocity_tracking_error": 0.0908546969294548,
+      "yaw_tracking_error": 0.04299861565232277,
+      "fell": false
+    },
+    {
+      "episode_id": 1,
+      "episode_label": "lateral_only",
+      "num_steps": 410,
+      "velocity_tracking_error": 0.07090900838375092,
+      "yaw_tracking_error": 0.14370208978652954,
+      "fell": true
+    },
+    {
+      "episode_id": 2,
+      "episode_label": "yaw_only",
+      "num_steps": 395,
+      "velocity_tracking_error": 0.06809580326080322,
+      "yaw_tracking_error": 0.15586234629154205,
+      "fell": true
+    },
+    {
+      "episode_id": 3,
+      "episode_label": "combined",
+      "num_steps": 438,
+      "velocity_tracking_error": 0.11422069370746613,
+      "yaw_tracking_error": 0.10316720604896545,
+      "fell": true
+    }
+  ]
+}
