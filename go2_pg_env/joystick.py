@@ -296,7 +296,7 @@ class Joystick(go2_base.Go2Env):
 
         rewards = self._get_reward(data, action, state.info, state.metrics, done, first_contact, contact)
         rewards = {key: value * self._config.reward_config.scales[key] for key, value in rewards.items()}
-        reward = jp.clip(sum(rewards.values()) * self.dt, 0.0, 10000.0)
+        reward = jp.clip(sum(rewards.values()) * self.dt, -100, 10000.0)
 
         state.info["episode_step"] = jp.where(done, 0, state.info["episode_step"] + 1)
         state.info["training_step"] = state.info["training_step"] + 1
@@ -592,10 +592,22 @@ class Joystick(go2_base.Go2Env):
         """
         
         del current_command
-        if episode_progress is None:
-            episode_progress = jp.array(0.0)
+        progress: jax.Array = jp.array(0.0) if episode_progress is None else episode_progress
 
-        alpha = jp.clip(episode_progress, 0.0, 1.0)
+        # When use_training_progress=True the received value is
+        # training_step / training_progress_steps.  Because Brax's AutoReset
+        # wrapper calls env.reset() on termination, training_step resets to 0
+        # each episode and this ratio peaks at only
+        # ~episode_length / training_progress_steps ≈ 0.07 — the curriculum
+        # never expands.  Rescale so alpha runs 0 → 1 within every episode.
+        if self._use_training_progress and self._training_progress_steps > 0:
+            alpha = jp.clip(
+                progress * self._training_progress_steps / float(self._config.episode_length),
+                0.0,
+                1.0,
+            )
+        else:
+            alpha = jp.clip(progress, 0.0, 1.0)
 
         cmd_min = (1 - alpha) * self._cmd_min + alpha * self._student_stage2_goal_min
         cmd_max = (1 - alpha) * self._cmd_max + alpha * self._student_stage2_goal_max
