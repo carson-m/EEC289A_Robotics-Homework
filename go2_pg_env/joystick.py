@@ -247,6 +247,7 @@ class Joystick(go2_base.Go2Env):
             "rng": rng,
             "command": command,
             "steps_until_next_cmd": steps_until_next_cmd,
+            "episode_step": jp.array(0, dtype=jp.int32),
             "last_act": jp.zeros(self.mjx_model.nu),
             "last_last_act": jp.zeros(self.mjx_model.nu),
             "feet_air_time": jp.zeros(4),
@@ -292,13 +293,16 @@ class Joystick(go2_base.Go2Env):
         rewards = {key: value * self._config.reward_config.scales[key] for key, value in rewards.items()}
         reward = jp.clip(sum(rewards.values()) * self.dt, 0.0, 10000.0)
 
+        state.info["episode_step"] = jp.where(done, 0, state.info["episode_step"] + 1)
+        episode_progress = jp.clip(state.info["episode_step"] / float(self._config.episode_length), 0.0, 1.0)
+
         state.info["last_last_act"] = state.info["last_act"]
         state.info["last_act"] = action
         state.info["steps_until_next_cmd"] -= 1
         state.info["rng"], key1, key2 = jax.random.split(state.info["rng"], 3)
         state.info["command"] = jp.where(
             state.info["steps_until_next_cmd"] <= 0,
-            self.sample_command(key1, state.info["command"]),
+            self.sample_command(key1, state.info["command"], episode_progress),
             state.info["command"],
         )
         state.info["steps_until_next_cmd"] = jp.where(
@@ -544,12 +548,20 @@ class Joystick(go2_base.Go2Env):
             state,
         )
 
-    def _command_sampling_profile(self, current_command: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+    def _command_sampling_profile(
+        self,
+        current_command: jax.Array,
+        episode_progress: jax.Array | None = None,
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
         if self._command_stage_name == "stage_2":
-            return self._student_stage2_sampling_profile(current_command)
+            return self._student_stage2_sampling_profile(current_command, episode_progress)
         return self._cmd_min, self._cmd_max, self._cmd_b
 
-    def _student_stage2_sampling_profile(self, current_command: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+    def _student_stage2_sampling_profile(
+        self,
+        current_command: jax.Array,
+        episode_progress: jax.Array | None = None,
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
         """Homework seam for stage_2 command sampling.
 
         TODO(student): keep stage_1 as the fixed forward-only baseline, and use
@@ -565,13 +577,24 @@ class Joystick(go2_base.Go2Env):
         2. widen the stage_2 sampling range toward `self._student_stage2_goal_*`
         3. increase the probability of non-zero `vy` and `yaw_rate` commands
         """
+        
         del current_command
-        return self._cmd_min, self._cmd_max, self._cmd_b
+        if episode_progress is None:
+            episode_progress = jp.array(0.0)
 
-    def sample_command(self, rng: jax.Array, current_command: jax.Array) -> jax.Array:
+        alpha = jp.clip(episode_progress, 0.0, 1.0)
+
+        cmd_min = (1 - alpha) * self._cmd_min + alpha * self._student_stage2_goal_min
+        cmd_max = (1 - alpha) * self._cmd_max + alpha * self._student_stage2_goal_max
+        cmd_b = (1 - alpha) * self._cmd_b + alpha * self._student_stage2_goal_b
+
+        return cmd_min, cmd_max, cmd_b
+        
+
+    def sample_command(self, rng: jax.Array, current_command: jax.Array, episode_progress: jax.Array) -> jax.Array:
         rng, y_rng, w_rng, z_rng = jax.random.split(rng, 4)
-        cmd_min, cmd_max, cmd_keep_prob = self._command_sampling_profile(current_command)
+        cmd_min, cmd_max, cmd_keep_prob = self._command_sampling_profile(current_command, episode_progress)
         candidate = jax.random.uniform(y_rng, shape=(3,), minval=cmd_min, maxval=cmd_max)
         active_mask = jax.random.bernoulli(z_rng, cmd_keep_prob, shape=(3,))
-        blend_mask = jax.random.bernoulli(w_rng, 0.5, shape=(3,))
+        blend_mask = jax.random.bernoulli(w_rng, 0.5, shape=(3,)) # Blend between the current command and the new candidate to encourage smoother transitions.
         return current_command - blend_mask * (current_command - candidate * active_mask)
