@@ -107,6 +107,8 @@ def default_config() -> config_dict.ConfigDict:
             student_stage2_goal_max=[1.0, 0.4, 1.0],
             student_stage2_goal_b=[0.9, 0.25, 0.5],
         ),
+        use_training_progress=False,
+        training_progress_steps_per_env=0.0,
         impl="jax",
         naconmax=4 * 8192,
         njmax=40,
@@ -188,6 +190,8 @@ class Joystick(go2_base.Go2Env):
         self._student_stage2_goal_min = jp.array(self._config.command_config.student_stage2_goal_min)
         self._student_stage2_goal_max = jp.array(self._config.command_config.student_stage2_goal_max)
         self._student_stage2_goal_b = jp.array(self._config.command_config.student_stage2_goal_b)
+        self._use_training_progress = bool(getattr(self._config, "use_training_progress", False))
+        self._training_progress_steps = float(getattr(self._config, "training_progress_steps_per_env", 0.0))
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         qpos = self._init_q
@@ -248,6 +252,7 @@ class Joystick(go2_base.Go2Env):
             "command": command,
             "steps_until_next_cmd": steps_until_next_cmd,
             "episode_step": jp.array(0, dtype=jp.int32),
+            "training_step": jp.array(0, dtype=jp.int32),
             "last_act": jp.zeros(self.mjx_model.nu),
             "last_last_act": jp.zeros(self.mjx_model.nu),
             "feet_air_time": jp.zeros(4),
@@ -294,7 +299,15 @@ class Joystick(go2_base.Go2Env):
         reward = jp.clip(sum(rewards.values()) * self.dt, 0.0, 10000.0)
 
         state.info["episode_step"] = jp.where(done, 0, state.info["episode_step"] + 1)
+        state.info["training_step"] = state.info["training_step"] + 1
         episode_progress = jp.clip(state.info["episode_step"] / float(self._config.episode_length), 0.0, 1.0)
+        progress_for_sampling = episode_progress
+        if self._use_training_progress and self._training_progress_steps > 0:
+            progress_for_sampling = jp.clip(
+                state.info["training_step"] / self._training_progress_steps,
+                0.0,
+                1.0,
+            )
 
         state.info["last_last_act"] = state.info["last_act"]
         state.info["last_act"] = action
@@ -302,7 +315,7 @@ class Joystick(go2_base.Go2Env):
         state.info["rng"], key1, key2 = jax.random.split(state.info["rng"], 3)
         state.info["command"] = jp.where(
             state.info["steps_until_next_cmd"] <= 0,
-            self.sample_command(key1, state.info["command"], episode_progress),
+            self.sample_command(key1, state.info["command"], progress_for_sampling),
             state.info["command"],
         )
         state.info["steps_until_next_cmd"] = jp.where(

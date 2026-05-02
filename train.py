@@ -212,6 +212,10 @@ def run_stage(
     ppo_cfg = get_ppo_config(locomotion_params, env_name, impl)
     apply_stage_config(env_cfg, ppo_cfg, config, stage_name)
 
+    training_steps_per_env = float(ppo_cfg.num_timesteps) / float(ppo_cfg.num_envs)
+    env_cfg.training_progress_steps_per_env = training_steps_per_env
+    env_cfg.use_training_progress = True
+
     env = registry.load(env_name, config=env_cfg, config_overrides=build_env_overrides(config))
     eval_env = registry.load(env_name, config=env_cfg, config_overrides=build_env_overrides(config))
 
