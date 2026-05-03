@@ -609,7 +609,7 @@ class Joystick(go2_base.Go2Env):
         else:
             alpha = jp.clip(progress, 0.0, 1.0)
         
-        alpha = np.sin(alpha * jp.pi / 2) # Smoother curriculum progression than linear alpha.
+        alpha = jp.sin(alpha * jp.pi / 2) # Smoother curriculum progression than linear alpha.
 
         cmd_min = (1 - alpha) * self._cmd_min + alpha * self._student_stage2_goal_min
         cmd_max = (1 - alpha) * self._cmd_max + alpha * self._student_stage2_goal_max
