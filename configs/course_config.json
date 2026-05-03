@@ -97,13 +97,14 @@
       },
       "command_keep_prob": [
         1.0,
-        0.7,
-        0.7
+        0.6,
+        0.6
       ]
     },
     "reward_scales": {
       "action_rate": -0.03,
-      "energy": -0.002
+      "energy": -0.002,
+      "orientation": -10.0
     },
     "restore_previous_stage_checkpoint": true
   },

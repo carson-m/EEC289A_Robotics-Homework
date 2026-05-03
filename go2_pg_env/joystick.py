@@ -86,7 +86,7 @@ def default_config() -> config_dict.ConfigDict:
                 feet_slip=-0.1,
                 feet_air_time=0.1,
             ),
-            tracking_sigma=0.25,
+            tracking_sigma=0.1, # was 0.25
             max_foot_height=0.1,
         ),
         pert_config=config_dict.create(
@@ -190,7 +190,6 @@ class Joystick(go2_base.Go2Env):
         self._student_stage2_goal_min = jp.array(self._config.command_config.student_stage2_goal_min)
         self._student_stage2_goal_max = jp.array(self._config.command_config.student_stage2_goal_max)
         self._student_stage2_goal_b = jp.array(self._config.command_config.student_stage2_goal_b)
-        self._use_training_progress = bool(getattr(self._config, "use_training_progress", False))
         self._training_progress_steps = float(getattr(self._config, "training_progress_steps_per_env", 0.0))
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
@@ -302,7 +301,7 @@ class Joystick(go2_base.Go2Env):
         state.info["training_step"] = state.info["training_step"] + 1
         episode_progress = jp.clip(state.info["episode_step"] / float(self._config.episode_length), 0.0, 1.0)
         progress_for_sampling = episode_progress
-        if self._use_training_progress and self._training_progress_steps > 0:
+        if self._training_progress_steps > 0:
             progress_for_sampling = jp.clip(
                 state.info["training_step"] / self._training_progress_steps,
                 0.0,
@@ -600,7 +599,7 @@ class Joystick(go2_base.Go2Env):
         # each episode and this ratio peaks at only
         # ~episode_length / training_progress_steps ≈ 0.07 — the curriculum
         # never expands.  Rescale so alpha runs 0 → 1 within every episode.
-        if self._use_training_progress and self._training_progress_steps > 0:
+        if self._training_progress_steps > 0:
             alpha = jp.clip(
                 progress * self._training_progress_steps / float(self._config.episode_length),
                 0.0,
@@ -609,7 +608,7 @@ class Joystick(go2_base.Go2Env):
         else:
             alpha = jp.clip(progress, 0.0, 1.0)
         
-        alpha = jp.sin(alpha * jp.pi / 2) # Smoother curriculum progression than linear alpha.
+        alpha = jp.sin(jp.clip(3 * alpha, 0.0, 1.0) * jp.pi / 2) # Smoother curriculum progression than linear alpha.
 
         cmd_min = (1 - alpha) * self._cmd_min + alpha * self._student_stage2_goal_min
         cmd_max = (1 - alpha) * self._cmd_max + alpha * self._student_stage2_goal_max
